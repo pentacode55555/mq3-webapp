@@ -1,0 +1,340 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101512">
+<style>:root{color-scheme:light}body{margin:0}[hidden]{display:none!important}</style>
+<title>MQ3 알코올 측정</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+  /* 레이아웃: 상단 연결 줄 / 가운데 측정값 카드 / 하단 고정 바로가기 바 */
+  :root {
+    --bg: #eef1ee;
+    --surface: #ffffff;
+    --fg: #17201b;
+    --muted: #5d6b63;
+    --line: #d5ddd7;
+    --ok: #1f8a4c;
+    --ok-bg: #dff3e6;
+    --warn: #b36b00;
+    --warn-bg: #fdecc8;
+    --danger: #c42b2b;
+    --danger-bg: #fbdada;
+    --idle: #6b7770;
+    --idle-bg: #e4e9e5;
+    --btn: #17201b;
+    --btn-fg: #ffffff;
+    --font-text: "Noto Sans KR", system-ui, sans-serif;
+    --font-num: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #101512;
+      --surface: #1a211d;
+      --fg: #e8eee9;
+      --muted: #96a59b;
+      --line: #2d3832;
+      --ok: #55d68a;
+      --ok-bg: #153423;
+      --warn: #f0b24a;
+      --warn-bg: #3b2c0c;
+      --danger: #ff7b7b;
+      --danger-bg: #432020;
+      --idle: #96a59b;
+      --idle-bg: #232c27;
+      --btn: #e8eee9;
+      --btn-fg: #101512;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #101512;
+    --surface: #1a211d;
+    --fg: #e8eee9;
+    --muted: #96a59b;
+    --line: #2d3832;
+    --ok: #55d68a;
+    --ok-bg: #153423;
+    --warn: #f0b24a;
+    --warn-bg: #3b2c0c;
+    --danger: #ff7b7b;
+    --danger-bg: #432020;
+    --idle: #96a59b;
+    --idle-bg: #232c27;
+    --btn: #e8eee9;
+    --btn-fg: #101512;
+    color-scheme: dark;
+  }
+
+  html, body { height: 100%; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-text);
+    font-size: 16px;
+    line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 16px 104px;
+  }
+  .app {
+    max-width: 480px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .conn { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--idle); flex: none; }
+  .dot.on { background: var(--ok); }
+  .dot.busy { background: var(--warn); }
+  .conn-text { font-weight: 500; overflow-wrap: anywhere; }
+
+  button, .nav a { font: inherit; }
+  .btn {
+    min-height: 48px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 12px;
+    background: var(--btn);
+    color: var(--btn-fg);
+    font-weight: 700;
+    cursor: pointer;
+    flex: none;
+  }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .btn:focus-visible, .nav a:focus-visible { outline: 3px solid var(--ok); outline-offset: 2px; }
+
+  .card {
+    background: var(--idle-bg);
+    border-radius: 20px;
+    padding: 28px 20px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    transition: background-color 0.3s;
+  }
+  .card[data-level="ok"] { background: var(--ok-bg); }
+  .card[data-level="warn"] { background: var(--warn-bg); }
+  .card[data-level="danger"] { background: var(--danger-bg); }
+  .label { color: var(--muted); font-size: 14px; letter-spacing: 0.04em; }
+  .value {
+    font-family: var(--font-num);
+    font-size: clamp(64px, 24vw, 104px);
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    color: var(--idle);
+  }
+  .card[data-level="ok"] .value, .card[data-level="ok"] .state { color: var(--ok); }
+  .card[data-level="warn"] .value, .card[data-level="warn"] .state { color: var(--warn); }
+  .card[data-level="danger"] .value, .card[data-level="danger"] .state { color: var(--danger); }
+  .card.stale .value { opacity: 0.35; }
+  .unit { font-family: var(--font-num); color: var(--muted); font-size: 16px; }
+  .state { font-size: 22px; font-weight: 700; color: var(--idle); }
+
+  .scale { width: 100%; margin-top: 16px; }
+  .track { position: relative; height: 10px; border-radius: 5px; display: flex; overflow: hidden; }
+  .track span:nth-child(1) { background: var(--ok); width: 25%; }
+  .track span:nth-child(2) { background: var(--warn); width: 41.67%; }
+  .track span:nth-child(3) { background: var(--danger); flex: 1; }
+  .pin {
+    position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px;
+    border-radius: 2px; background: var(--fg); left: 0; transition: left 0.4s; display: none;
+  }
+  .ticks { position: relative; height: 20px; margin-top: 4px; font-family: var(--font-num); font-size: 12px; color: var(--muted); }
+  .ticks span { position: absolute; transform: translateX(-50%); }
+  .ticks span:first-child { transform: none; }
+
+  .note {
+    margin: 0; padding: 12px 14px; border-radius: 12px;
+    background: var(--surface); border: 1px solid var(--line);
+    color: var(--muted); font-size: 14px; overflow-wrap: anywhere;
+  }
+  .note.err { color: var(--danger); border-color: var(--danger); }
+
+  .nav {
+    position: fixed; left: 0; right: 0; bottom: 0;
+    background: var(--surface); border-top: 1px solid var(--line);
+    padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  .nav-in { max-width: 480px; margin: 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .nav a {
+    min-height: 56px; display: flex; align-items: center; justify-content: center;
+    border-radius: 14px; background: var(--bg); color: var(--fg);
+    text-decoration: none; font-weight: 500; text-align: center; padding: 0 6px;
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="app">
+  <div class="top">
+    <div class="conn"><span class="dot" id="dot"></span><span class="conn-text" id="connText">연결 안 됨</span></div>
+    <button class="btn" id="connBtn" type="button">연결</button>
+  </div>
+
+  <section class="card" id="card" data-level="idle" aria-live="polite">
+    <span class="label">알코올 농도</span>
+    <span class="value" id="value">--.---</span>
+    <span class="unit">PPM</span>
+    <span class="state" id="state">대기 중</span>
+    <div class="scale" aria-hidden="true">
+      <div class="track"><span></span><span></span><span></span><div class="pin" id="pin"></div></div>
+      <div class="ticks"><span style="left:0">0</span><span style="left:25%">0.03</span><span style="left:66.67%">0.08</span><span style="left:100%;transform:translateX(-100%)">0.12+</span></div>
+    </div>
+  </section>
+
+  <p class="note" id="note">‘연결’을 누르고 MQ3-ALCOHOL 기기를 선택하세요. 센서 보정이 끝나면 1초마다 값이 들어옵니다.</p>
+</main>
+
+<nav class="nav" aria-label="바로가기">
+  <div class="nav-in">
+    <a href="tel:">전화</a>
+    <a href="intent://open#Intent;scheme=kakaomap;package=net.daum.android.map;end">카카오맵</a>
+    <a href="intent://open#Intent;scheme=kakaot;package=com.kakao.taxi;end">카카오 T</a>
+  </div>
+</nav>
+
+<script>
+  var DEVICE_NAME = 'MQ3-ALCOHOL';
+  var SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  var TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+  var WARN = 0.03, DANGER = 0.08, SCALE_MAX = 0.12, STALE_MS = 3000;
+
+  var LEVELS = {
+    ok: '정상',
+    warn: '주의',
+    danger: '위험'
+  };
+
+  function levelFor(ppm) {
+    return ppm >= DANGER ? 'danger' : ppm >= WARN ? 'warn' : 'ok';
+  }
+
+  // notify가 줄 중간에서 끊겨 와도 이어 붙인다. 숫자가 아닌 줄은 버린다.
+  function parseLines(buffer, chunk) {
+    var parts = (buffer + chunk).split('\n');
+    var rest = parts.pop();
+    var values = [];
+    parts.forEach(function (p) {
+      var t = p.trim();
+      if (!/^\d+(\.\d+)?$/.test(t)) return;
+      var n = parseFloat(t);
+      if (isFinite(n)) values.push(n);
+    });
+    return { values: values, rest: rest };
+  }
+
+  var $ = function (id) { return document.getElementById(id); };
+  var dot = $('dot'), connText = $('connText'), connBtn = $('connBtn');
+  var card = $('card'), valueEl = $('value'), stateEl = $('state'), pin = $('pin'), note = $('note');
+
+  var device = null, buffer = '', lastAt = 0;
+  var decoder = new TextDecoder();
+
+  function setNote(msg, isErr) {
+    note.textContent = msg;
+    note.className = 'note' + (isErr ? ' err' : '');
+  }
+
+  function setConn(mode) {
+    dot.className = 'dot' + (mode === 'on' ? ' on' : mode === 'busy' ? ' busy' : '');
+    connText.textContent = mode === 'on' ? '연결됨' : mode === 'busy' ? '연결 중…' : '연결 안 됨';
+    connBtn.textContent = mode === 'on' ? '연결 해제' : '연결';
+    connBtn.disabled = mode === 'busy';
+    if (mode !== 'on') {
+      card.dataset.level = 'idle';
+      card.classList.remove('stale');
+      valueEl.textContent = '--.---';
+      stateEl.textContent = '대기 중';
+      pin.style.display = 'none';
+    }
+  }
+
+  function show(ppm) {
+    var level = levelFor(ppm);
+    lastAt = Date.now();
+    card.classList.remove('stale');
+    card.dataset.level = level;
+    valueEl.textContent = ppm.toFixed(3);
+    stateEl.textContent = LEVELS[level];
+    pin.style.display = 'block';
+    pin.style.left = Math.min(ppm / SCALE_MAX, 1) * 100 + '%';
+  }
+
+  function onData(ev) {
+    var r = parseLines(buffer, decoder.decode(ev.target.value));
+    buffer = r.rest;
+    if (r.values.length) show(r.values[r.values.length - 1]);
+  }
+
+  function onDisconnected() {
+    device = null;
+    buffer = '';
+    setConn('off');
+    setNote('연결이 끊어졌습니다. 다시 연결하려면 ‘연결’을 누르세요.');
+  }
+
+  async function connect() {
+    setConn('busy');
+    setNote('기기 목록에서 ' + DEVICE_NAME + ' 을(를) 선택하세요.');
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: DEVICE_NAME }, { services: [SERVICE] }],
+        optionalServices: [SERVICE]
+      });
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+      var server = await device.gatt.connect();
+      var service = await server.getPrimaryService(SERVICE);
+      var tx = await service.getCharacteristic(TX);
+      tx.addEventListener('characteristicvaluechanged', onData);
+      await tx.startNotifications();
+      buffer = '';
+      lastAt = Date.now();
+      setConn('on');
+      setNote('연결되었습니다. 센서 보정 중에는 값이 들어오지 않을 수 있습니다.');
+    } catch (e) {
+      if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
+      device = null;
+      setConn('off');
+      if (e && e.name === 'NotFoundError') {
+        setNote('기기를 선택하지 않았습니다.');
+      } else if (e && (e.name === 'SecurityError' || e.name === 'NotAllowedError')) {
+        setNote('이 화면에서는 블루투스를 사용할 수 없습니다. 안드로이드 Chrome에서 이 페이지를 HTTPS 주소로 직접 열어야 합니다.', true);
+      } else {
+        setNote('연결하지 못했습니다: ' + (e && e.message ? e.message : e), true);
+      }
+    }
+  }
+
+  function disconnect() {
+    if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
+  }
+
+  connBtn.addEventListener('click', function () {
+    if (device && device.gatt && device.gatt.connected) disconnect(); else connect();
+  });
+
+  setInterval(function () {
+    if (device && device.gatt && device.gatt.connected && Date.now() - lastAt > STALE_MS) {
+      card.classList.add('stale');
+      setNote('3초 넘게 데이터가 들어오지 않습니다. ESP32가 센서를 보정 중이거나 범위를 벗어났을 수 있습니다.');
+    }
+  }, 1000);
+
+  if (!navigator.bluetooth) {
+    connBtn.disabled = true;
+    setNote('이 브라우저는 Web Bluetooth를 지원하지 않습니다. 안드로이드 Chrome에서 HTTPS 주소로 열어주세요.', true);
+  }
+</script>
+</body>
+</html>
