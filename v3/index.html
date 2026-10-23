@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#101512">
+<title>MQ3 알코올 측정</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@500&family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<style>
+  /* 레이아웃: 상단 연결 줄 / 가운데 측정 카드 / 하단 고정 바로가기 바 */
+  :root {
+    color-scheme: light;
+    --bg: #eef1ee;
+    --surface: #ffffff;
+    --fg: #17201b;
+    --muted: #5d6b63;
+    --line: #d5ddd7;
+    --ok: #1f8a4c;
+    --ok-bg: #dff3e6;
+    --warn: #b36b00;
+    --warn-bg: #fdecc8;
+    --danger: #c42b2b;
+    --danger-bg: #fbdada;
+    --meas: #1f5fd1;
+    --meas-bg: #dbe7fb;
+    --idle: #6b7770;
+    --idle-bg: #e4e9e5;
+    --btn: #17201b;
+    --btn-fg: #ffffff;
+    --font-text: "Noto Sans KR", system-ui, sans-serif;
+    --font-num: "DM Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --bg: #101512;
+      --surface: #1a211d;
+      --fg: #e8eee9;
+      --muted: #96a59b;
+      --line: #2d3832;
+      --ok: #55d68a;
+      --ok-bg: #153423;
+      --warn: #f0b24a;
+      --warn-bg: #3b2c0c;
+      --danger: #ff7b7b;
+      --danger-bg: #432020;
+      --meas: #7aa7ff;
+      --meas-bg: #16284a;
+      --idle: #96a59b;
+      --idle-bg: #232c27;
+      --btn: #e8eee9;
+      --btn-fg: #101512;
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --bg: #101512;
+    --surface: #1a211d;
+    --fg: #e8eee9;
+    --muted: #96a59b;
+    --line: #2d3832;
+    --ok: #55d68a;
+    --ok-bg: #153423;
+    --warn: #f0b24a;
+    --warn-bg: #3b2c0c;
+    --danger: #ff7b7b;
+    --danger-bg: #432020;
+    --meas: #7aa7ff;
+    --meas-bg: #16284a;
+    --idle: #96a59b;
+    --idle-bg: #232c27;
+    --btn: #e8eee9;
+    --btn-fg: #101512;
+  }
+
+  html, body { margin: 0; min-height: 100%; }
+  [hidden] { display: none !important; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-text);
+    font-size: 16px;
+    line-height: 1.5;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+    padding-block: 16px 190px;
+  }
+  .app { max-width: 480px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .conn { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--idle); flex: none; }
+  .dot.on { background: var(--ok); }
+  .dot.busy { background: var(--warn); }
+  .conn-text { font-weight: 500; overflow-wrap: anywhere; }
+
+  button, input, .nav a { font: inherit; }
+  .btn {
+    min-height: 48px; padding: 0 20px; border: 0; border-radius: 12px;
+    background: var(--btn); color: var(--btn-fg); font-weight: 700; cursor: pointer; flex: none;
+  }
+  .btn.ghost { background: transparent; color: var(--fg); border: 1px solid var(--line); }
+  .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  button:focus-visible, input:focus-visible, .nav a:focus-visible { outline: 3px solid var(--ok); outline-offset: 2px; }
+
+  .card {
+    background: var(--idle-bg); border-radius: 20px; padding: 28px 20px 24px;
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    transition: background-color 0.3s;
+  }
+  .card[data-level="ok"] { background: var(--ok-bg); }
+  .card[data-level="warn"] { background: var(--warn-bg); }
+  .card[data-level="danger"] { background: var(--danger-bg); }
+  .card[data-level="meas"] { background: var(--meas-bg); }
+  .label { color: var(--muted); font-size: 14px; letter-spacing: 0.04em; }
+  .value {
+    font-family: var(--font-num); font-size: clamp(64px, 24vw, 104px); line-height: 1;
+    font-variant-numeric: tabular-nums; color: var(--idle);
+  }
+  .state { font-size: 22px; font-weight: 700; color: var(--idle); }
+  .unit { font-family: var(--font-num); color: var(--muted); font-size: 16px; }
+  .card[data-level="ok"] .value, .card[data-level="ok"] .state { color: var(--ok); }
+  .card[data-level="warn"] .value, .card[data-level="warn"] .state { color: var(--warn); }
+  .card[data-level="danger"] .value, .card[data-level="danger"] .state { color: var(--danger); }
+  .card[data-level="meas"] .value, .card[data-level="meas"] .state { color: var(--meas); }
+  .card.stale .value { opacity: 0.35; }
+
+  .progress { width: 100%; height: 10px; border-radius: 5px; background: var(--surface); overflow: hidden; margin-top: 16px; }
+  .progress .bar { height: 100%; width: 0; background: var(--meas); }
+  .progress .bar.run { width: 100%; transition: width 5s linear; }
+
+  .scale { width: 100%; margin-top: 16px; }
+  .track { position: relative; height: 10px; border-radius: 5px; display: flex; overflow: hidden; }
+  .track span:nth-child(1) { background: var(--ok); width: 25%; }
+  .track span:nth-child(2) { background: var(--warn); width: 41.67%; }
+  .track span:nth-child(3) { background: var(--danger); flex: 1; }
+  .pin {
+    position: absolute; top: -4px; width: 4px; height: 18px; margin-left: -2px;
+    border-radius: 2px; background: var(--fg); left: 0; transition: left 0.4s; display: none;
+  }
+  .ticks { position: relative; height: 20px; margin-top: 4px; font-family: var(--font-num); font-size: 12px; color: var(--muted); }
+  .ticks span { position: absolute; transform: translateX(-50%); }
+  .ticks span:first-child { transform: none; }
+
+  .action { width: 100%; min-height: 60px; font-size: 20px; }
+  .note {
+    margin: 0; padding: 12px 14px; border-radius: 12px; background: var(--surface);
+    border: 1px solid var(--line); color: var(--muted); font-size: 14px; overflow-wrap: anywhere;
+  }
+  .note.err { color: var(--danger); border-color: var(--danger); }
+
+  /* 하단 바로가기 */
+  .nav {
+    position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line);
+    padding: 8px max(16px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  .nav-in { max-width: 480px; margin: 0 auto; }
+  .nav-head { display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
+  .nav-title { font-size: 13px; color: var(--muted); }
+  /* 개수에 맞춰 가운데를 기준으로 퍼진다 (최대 5개) */
+  .tiles { display: flex; justify-content: center; gap: 14px; padding: 6px 4px 4px; }
+  .tile { flex: none; width: 64px; display: flex; flex-direction: column; align-items: center; gap: 4px; color: var(--fg); text-decoration: none; }
+  .tile .ico {
+    width: 52px; height: 52px; border-radius: 13px; display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 22px; color: #fff; overflow: hidden;
+  }
+  .tile .ico img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .tile .name { font-size: 12px; max-width: 64px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<main class="app">
+  <div class="top">
+    <div class="conn"><span class="dot" id="dot"></span><span class="conn-text" id="connText">연결 안 됨</span></div>
+    <button class="btn" id="connBtn" type="button">연결</button>
+  </div>
+
+  <section class="card" id="card" data-level="idle" aria-live="polite">
+    <span class="label" id="label">알코올 농도</span>
+    <span class="value" id="value">--.---</span>
+    <span class="unit">PPM</span>
+    <span class="state" id="state">대기 중</span>
+    <div class="progress" id="progress" hidden><div class="bar" id="bar"></div></div>
+    <div class="scale" id="scale" aria-hidden="true">
+      <div class="track"><span></span><span></span><span></span><div class="pin" id="pin"></div></div>
+      <div class="ticks"><span style="left:0">0</span><span style="left:25%">0.03</span><span style="left:66.67%">0.08</span><span style="left:100%;transform:translateX(-100%)">0.12+</span></div>
+    </div>
+  </section>
+
+  <button class="btn action" id="actionBtn" type="button" hidden>측정 시작</button>
+  <p class="note" id="note">‘연결’을 누르고 MQ3-ALCOHOL 기기를 선택하세요.</p>
+</main>
+
+<nav class="nav" aria-label="바로가기">
+  <div class="nav-in">
+    <div class="nav-head">
+      <span class="nav-title">바로가기</span>
+    </div>
+    <div class="tiles" id="tiles"></div>
+  </div>
+</nav>
+
+<script>
+  /**************** 상수 ****************/
+  var DEVICE_NAME = 'MQ3-ALCOHOL';
+  var SERVICE = '6e400001-b5a3-f393-e0a9-e50e24dcca9e';
+  var RX = '6e400002-b5a3-f393-e0a9-e50e24dcca9e';
+  var TX = '6e400003-b5a3-f393-e0a9-e50e24dcca9e';
+  var WARN = 0.03, DANGER = 0.08, SCALE_MAX = 0.12, STALE_MS = 3000, VOICE_TIMEOUT_MS = 6000;
+  var LEVELS = { ok: '정상', warn: '주의', danger: '위험' };
+
+  /**************** 순수 로직 ****************/
+  function levelFor(ppm) {
+    return ppm >= DANGER ? 'danger' : ppm >= WARN ? 'warn' : 'ok';
+  }
+
+  // 줄 단위 메시지 파싱. 잘려 들어온 notify는 rest에 남겨 다음 chunk와 이어 붙인다.
+  function parseMessages(buffer, chunk) {
+    var parts = (buffer + chunk).split('\n');
+    var rest = parts.pop();
+    var msgs = [];
+    parts.forEach(function (p) {
+      var t = p.trim();
+      var m;
+      if (/^\d+(\.\d+)?$/.test(t)) msgs.push({ type: 'live', v: parseFloat(t) });
+      else if (t === 'MEAS') msgs.push({ type: 'meas' });
+      else if (t === 'LIVE') msgs.push({ type: 'back' });
+      else if (t === 'RES:ERR') msgs.push({ type: 'reserr' });
+      else if ((m = /^RES:(\d+(\.\d+)?)$/.exec(t))) msgs.push({ type: 'res', v: parseFloat(m[1]) });
+    });
+    return { msgs: msgs, rest: rest };
+  }
+
+  // 0.045 -> "영 점 영 사 오"
+  function spokenNumber(v) {
+    var words = { '0': '영', '1': '일', '2': '이', '3': '삼', '4': '사', '5': '오', '6': '육', '7': '칠', '8': '팔', '9': '구', '.': '점' };
+    return v.toFixed(3).split('').map(function (c) { return words[c]; }).join(' ');
+  }
+
+  function intentHref(pkg) {
+    var store = 'https://play.google.com/store/apps/details?id=' + pkg;
+    return 'intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=' +
+      pkg + ';S.browser_fallback_url=' + encodeURIComponent(store) + ';end';
+  }
+
+  /**************** 화면 요소 ****************/
+  var $ = function (id) { return document.getElementById(id); };
+  var dot = $('dot'), connText = $('connText'), connBtn = $('connBtn');
+  var card = $('card'), labelEl = $('label'), valueEl = $('value'), stateEl = $('state');
+  var pin = $('pin'), scale = $('scale'), progress = $('progress'), bar = $('bar');
+  var actionBtn = $('actionBtn'), note = $('note');
+
+  var device = null, rxChar = null, buffer = '', lastAt = 0;
+  var mode = 'off';            // off | live | starting | measuring | result
+  var startTimer = null;
+  var decoder = new TextDecoder();
+
+  function setNote(msg, isErr) {
+    note.textContent = msg;
+    note.className = 'note' + (isErr ? ' err' : '');
+  }
+
+  /**************** 음성 ****************/
+  function speak(text, done) {
+    var finished = false;
+    function finish() { if (!finished) { finished = true; if (done) done(); } }
+    if (!('speechSynthesis' in window)) { setTimeout(finish, 0); return; }
+    try {
+      window.speechSynthesis.cancel();
+      var u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR';
+      u.onend = finish;
+      u.onerror = finish;
+      window.speechSynthesis.speak(u);
+    } catch (e) { setTimeout(finish, 0); }
+  }
+
+  function stopSpeech() {
+    try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
+  }
+
+  /**************** 모드별 화면 ****************/
+  function setPin(ppm) {
+    pin.style.display = 'block';
+    pin.style.left = Math.min(ppm / SCALE_MAX, 1) * 100 + '%';
+  }
+
+  function resetBar() {
+    bar.classList.remove('run');
+    progress.hidden = true;
+  }
+
+  function renderIdle() {
+    card.dataset.level = 'idle';
+    card.classList.remove('stale');
+    labelEl.textContent = '알코올 농도';
+    valueEl.textContent = '--.---';
+    stateEl.textContent = '대기 중';
+    pin.style.display = 'none';
+    scale.hidden = false;
+    resetBar();
+  }
+
+  function setMode(m) {
+    mode = m;
+    if (m === 'off') {
+      renderIdle();
+      actionBtn.hidden = true;
+    } else if (m === 'live') {
+      renderIdle();
+      actionBtn.hidden = !rxChar;
+      actionBtn.disabled = false;
+      actionBtn.textContent = '측정 시작';
+      lastAt = Date.now();
+    } else if (m === 'starting') {
+      actionBtn.disabled = true;
+      actionBtn.textContent = '음성 안내 중…';
+    } else if (m === 'measuring') {
+      card.dataset.level = 'meas';
+      card.classList.remove('stale');
+      labelEl.textContent = '측정 중';
+      valueEl.textContent = '···';
+      stateEl.textContent = '약 5초 동안 측정합니다';
+      scale.hidden = true;
+      progress.hidden = false;
+      bar.classList.remove('run');
+      void bar.offsetWidth;
+      bar.classList.add('run');
+      actionBtn.hidden = false;
+      actionBtn.disabled = true;
+      actionBtn.textContent = '측정 중…';
+    } else if (m === 'result') {
+      resetBar();
+      scale.hidden = false;
+      actionBtn.hidden = false;
+      actionBtn.disabled = false;
+      actionBtn.textContent = '초기화';
+    }
+  }
+
+  function showLive(ppm) {
+    var level = levelFor(ppm);
+    lastAt = Date.now();
+    card.classList.remove('stale');
+    card.dataset.level = level;
+    valueEl.textContent = ppm.toFixed(3);
+    stateEl.textContent = LEVELS[level];
+    setPin(ppm);
+  }
+
+  function showResult(ppm) {
+    var level = levelFor(ppm);
+    setMode('result');
+    card.dataset.level = level;
+    labelEl.textContent = '측정 결과';
+    valueEl.textContent = ppm.toFixed(3);
+    stateEl.textContent = LEVELS[level] + ' 단계';
+    setPin(ppm);
+    setNote('5초 동안의 최댓값입니다. 다시 측정하려면 ‘초기화’를 누르세요.');
+    speak('측정 결과 ' + spokenNumber(ppm) + ', ' + LEVELS[level] + ' 단계입니다.');
+  }
+
+  function showResultError() {
+    setMode('result');
+    card.dataset.level = 'idle';
+    labelEl.textContent = '측정 결과';
+    valueEl.textContent = '오류';
+    stateEl.textContent = '측정에 실패했습니다';
+    pin.style.display = 'none';
+    setNote('센서 값을 읽지 못했습니다. ‘초기화’ 후 다시 시도하세요.', true);
+    speak('측정에 실패했습니다. 다시 시도해 주세요.');
+  }
+
+  /**************** BLE ****************/
+  function onMessage(msg) {
+    if (msg.type === 'live') {
+      if (mode === 'live' || mode === 'starting') {
+        if (mode === 'live') showLive(msg.v);
+      }
+    } else if (msg.type === 'meas') {
+      clearTimeout(startTimer);
+      setMode('measuring');
+      setNote('측정 중입니다. 센서에 숨을 불어주세요.');
+    } else if (msg.type === 'res') {
+      showResult(msg.v);
+    } else if (msg.type === 'reserr') {
+      showResultError();
+    } else if (msg.type === 'back') {
+      if (mode !== 'live') { setMode('live'); setNote('실시간 측정 중입니다.'); }
+    }
+  }
+
+  function onData(ev) {
+    var r = parseMessages(buffer, decoder.decode(ev.target.value));
+    buffer = r.rest;
+    r.msgs.forEach(onMessage);
+  }
+
+  /**************** 화면 켜두기 (연결 중) ****************/
+  var wakeLock = null;
+
+  async function acquireWakeLock() {
+    if (!('wakeLock' in navigator) || wakeLock) return;
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      wakeLock.addEventListener('release', function () { wakeLock = null; });
+    } catch (e) { wakeLock = null; }
+  }
+
+  function releaseWakeLock() {
+    if (!wakeLock) return;
+    try { wakeLock.release(); } catch (e) {}
+    wakeLock = null;
+  }
+
+  // 탭이 백그라운드로 가면 자동으로 풀리므로, 다시 보일 때 연결 중이면 다시 요청한다.
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible' && device && device.gatt && device.gatt.connected) acquireWakeLock();
+  });
+
+  function onDisconnected() {
+    device = null; rxChar = null; buffer = '';
+    clearTimeout(startTimer);
+    stopSpeech();
+    releaseWakeLock();
+    setConn('off');
+    setMode('off');
+    setNote('연결이 끊어졌습니다. 다시 연결하려면 ‘연결’을 누르세요.');
+  }
+
+  function setConn(state) {
+    dot.className = 'dot' + (state === 'on' ? ' on' : state === 'busy' ? ' busy' : '');
+    connText.textContent = state === 'on' ? '연결됨' : state === 'busy' ? '연결 중…' : '연결 안 됨';
+    connBtn.textContent = state === 'on' ? '연결 해제' : '연결';
+    connBtn.disabled = state === 'busy';
+  }
+
+  function sendCommand(text) {
+    if (!rxChar) return Promise.reject(new Error('no rx'));
+    var data = new TextEncoder().encode(text);
+    return rxChar.properties.writeWithoutResponse && rxChar.writeValueWithoutResponse
+      ? rxChar.writeValueWithoutResponse(data)
+      : rxChar.writeValue(data);
+  }
+
+  async function connect() {
+    setConn('busy');
+    setNote('기기 목록에서 ' + DEVICE_NAME + ' 을(를) 선택하세요.');
+    try {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: DEVICE_NAME }, { services: [SERVICE] }],
+        optionalServices: [SERVICE]
+      });
+      device.addEventListener('gattserverdisconnected', onDisconnected);
+      var server = await device.gatt.connect();
+      var service = await server.getPrimaryService(SERVICE);
+      var tx = await service.getCharacteristic(TX);
+      try { rxChar = await service.getCharacteristic(RX); } catch (e) { rxChar = null; }
+      tx.addEventListener('characteristicvaluechanged', onData);
+      await tx.startNotifications();
+      buffer = '';
+      setConn('on');
+      acquireWakeLock();
+      setMode('live');
+      setNote(rxChar ? '연결되었습니다. 센서 보정 중에는 값이 들어오지 않을 수 있습니다.'
+                     : '연결되었습니다. 이 펌웨어는 측정 시작을 지원하지 않아 실시간 값만 표시합니다.');
+    } catch (e) {
+      if (device && device.gatt && device.gatt.connected) device.gatt.disconnect();
+      device = null; rxChar = null;
+      setConn('off');
+      setMode('off');
+      if (e && e.name === 'NotFoundError') setNote('기기를 선택하지 않았습니다.');
+      else if (e && (e.name === 'SecurityError' || e.name === 'NotAllowedError')) setNote('이 화면에서는 블루투스를 사용할 수 없습니다. Android Chrome에서 HTTPS 주소로 직접 열어주세요.', true);
+      else setNote('연결하지 못했습니다: ' + (e && e.message ? e.message : e), true);
+    }
+  }
+
+  connBtn.addEventListener('click', function () {
+    if (device && device.gatt && device.gatt.connected) device.gatt.disconnect(); else connect();
+  });
+
+  function beginMeasure() {
+    if (mode !== 'live') return;
+    setMode('starting');
+    setNote('측정을 시작합니다.');
+    var sent = false;
+    function send() {
+      if (sent) return;
+      sent = true;
+      clearTimeout(startTimer);
+      sendCommand('START').catch(function (e) {
+        setMode('live');
+        setNote('측정 시작 명령을 보내지 못했습니다: ' + (e && e.message ? e.message : e), true);
+      });
+      // MEAS 응답이 오지 않으면 실시간으로 되돌린다.
+      startTimer = setTimeout(function () {
+        if (mode === 'starting') { setMode('live'); setNote('ESP32가 응답하지 않습니다. 다시 시도하세요.', true); }
+      }, 4000);
+    }
+    speak('측정을 시작합니다.', send);
+    startTimer = setTimeout(send, VOICE_TIMEOUT_MS);
+  }
+
+  function resetMeasure() {
+    stopSpeech();
+    sendCommand('RESET').then(function () {
+      setMode('live');
+      setNote('실시간 측정 중입니다.');
+    }).catch(function (e) {
+      setNote('초기화 명령을 보내지 못했습니다: ' + (e && e.message ? e.message : e), true);
+    });
+  }
+
+  actionBtn.addEventListener('click', function () {
+    if (mode === 'live') beginMeasure();
+    else if (mode === 'result') resetMeasure();
+  });
+
+  setInterval(function () {
+    if (mode === 'live' && device && device.gatt && device.gatt.connected && Date.now() - lastAt > STALE_MS) {
+      card.classList.add('stale');
+      setNote('3초 넘게 데이터가 들어오지 않습니다. ESP32가 센서를 보정 중이거나 범위를 벗어났을 수 있습니다.');
+    }
+  }, 1000);
+
+  if (!navigator.bluetooth) {
+    connBtn.disabled = true;
+    setNote('이 브라우저는 Web Bluetooth를 지원하지 않습니다. Android Chrome에서 HTTPS 주소로 열어주세요.', true);
+  }
+
+  /**************** 하단 바로가기 (고정, 최대 5개) ****************/
+  // 웹페이지는 설치된 앱 목록과 아이콘을 읽을 수 없어서 앱은 여기서 미리 지정한다.
+  // 앱을 바꾸려면 이 배열만 고친다. 개수에 맞춰 가운데 정렬되고 5개까지만 표시한다.
+  var APPS = [
+    { name: '전화', href: 'tel:', phone: true },
+    { name: '카카오맵', pkg: 'net.daum.android.map', icon: 'icons/kakaomap.png' },
+    { name: '카카오 T', pkg: 'com.kakao.taxi', icon: 'icons/kakaot.png' },
+    { name: '카카오 T 대리', pkg: 'com.kakao.wheel', icon: 'icons/kakaot-daeri.png' }
+  ];
+  var MAX_APPS = 5;
+
+  var PHONE_SVG =
+    '<svg viewBox="0 0 24 24" width="30" height="30" aria-hidden="true"><path fill="#fff" d="M6.6 10.8a15.1 15.1 0 0 0 6.6 6.6l2.2-2.2a1 1 0 0 1 1-.25 11.4 11.4 0 0 0 3.6.57 1 1 0 0 1 1 1V20a1 1 0 0 1-1 1A17 17 0 0 1 3 4a1 1 0 0 1 1-1h3.5a1 1 0 0 1 1 1c0 1.25.2 2.45.57 3.6a1 1 0 0 1-.25 1z"/></svg>';
+
+  function makeIcon(app) {
+    var ico = document.createElement('span');
+    ico.className = 'ico';
+    if (app.phone) {
+      ico.style.background = '#2fb457';
+      ico.innerHTML = PHONE_SVG;
+    } else {
+      var img = document.createElement('img');
+      img.src = app.icon;
+      img.alt = '';
+      ico.appendChild(img);
+    }
+    return ico;
+  }
+
+  function renderTiles() {
+    var box = $('tiles');
+    box.textContent = '';
+    APPS.slice(0, MAX_APPS).forEach(function (app) {
+      var el = document.createElement('a');
+      el.className = 'tile';
+      el.href = app.href ? app.href : intentHref(app.pkg);
+      el.appendChild(makeIcon(app));
+      var nm = document.createElement('span');
+      nm.className = 'name';
+      nm.textContent = app.name;
+      el.appendChild(nm);
+      box.appendChild(el);
+    });
+  }
+
+  renderTiles();
+</script>
+</body>
+</html>
